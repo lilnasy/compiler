@@ -17,19 +17,18 @@ const TRANSITION_ANIMATE = "transition:animate"
 const TRANSITION_NAME = "transition:name"
 
 type TransformOptions struct {
-	Scope                   string
-	Filename                string
-	NormalizedFilename      string
-	InternalURL             string
-	SourceMap               string
-	AstroGlobalArgs         string
-	ScopedStyleStrategy     string
-	Compact                 bool
-	ResultScopedSlot        bool
-	ExperimentalTransitions bool
-	TransitionsAnimationURL string
-	ResolvePath             func(string) string
-	PreprocessStyle         interface{}
+	Scope               string
+	Filename            string
+	NormalizedFilename  string
+	InternalURL         string
+	SourceMap           string
+	AstroGlobalArgs     string
+	ScopedStyleStrategy string
+	Compact             bool
+	ResultScopedSlot    bool
+	ResolvePath         func(string) string
+	PreprocessStyle     interface{}
+	ExtraHoist          []string
 }
 
 func Transform(doc *astro.Node, opts TransformOptions, h *handler.Handler) *astro.Node {
@@ -348,7 +347,7 @@ func ExtractScript(doc *astro.Node, n *astro.Node, opts *TransformOptions, h *ha
 		// if <script>, hoist to the document root
 		// If also using define:vars, that overrides the hoist tag.
 		if (hasTruthyAttr(n, "hoist")) ||
-			len(n.Attr) == 0 || (len(n.Attr) == 1 && n.Attr[0].Key == "src") {
+			len(n.Attr) == 0 || (len(n.Attr) == 1 && n.Attr[0].Key == "src") || (len(n.Attr) == 1 && n.Attr[0].Key == "define:serverfunctions") {
 			shouldAdd := true
 			for _, attr := range n.Attr {
 				if attr.Key == "hoist" {

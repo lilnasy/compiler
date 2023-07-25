@@ -125,18 +125,17 @@ func makeTransformOptions(options js.Value) transform.TransformOptions {
 	}
 
 	return transform.TransformOptions{
-		Filename:                filename,
-		NormalizedFilename:      normalizedFilename,
-		InternalURL:             internalURL,
-		SourceMap:               sourcemap,
-		AstroGlobalArgs:         astroGlobalArgs,
-		Compact:                 compact,
-		ResolvePath:             resolvePathFn,
-		PreprocessStyle:         preprocessStyle,
-		ResultScopedSlot:        scopedSlot,
-		ScopedStyleStrategy:     scopedStyleStrategy,
-		ExperimentalTransitions: experimentalTransitions,
-		TransitionsAnimationURL: transitionsAnimationURL,
+		Filename:            filename,
+		NormalizedFilename:  normalizedFilename,
+		InternalURL:         internalURL,
+		SourceMap:           sourcemap,
+		AstroGlobalArgs:     astroGlobalArgs,
+		Compact:             compact,
+		ResolvePath:         resolvePathFn,
+		PreprocessStyle:     preprocessStyle,
+		ResultScopedSlot:    scopedSlot,
+		ScopedStyleStrategy: scopedStyleStrategy,
+		ExtraHoist:          make([]string, 0),
 	}
 }
 
@@ -150,10 +149,11 @@ type RawSourceMap struct {
 }
 
 type HoistedScript struct {
-	Code string `js:"code"`
-	Src  string `js:"src"`
-	Type string `js:"type"`
-	Map  string `js:"map"`
+	Code            string `js:"code"`
+	Src             string `js:"src"`
+	Type            string `js:"type"`
+	Map             string `js:"map"`
+	ServerFunctions string `js:"serverfunctions"`
 }
 
 type HydratedComponent struct {
@@ -336,16 +336,33 @@ func Transform() any {
 				for _, node := range doc.Scripts {
 					src := astro.GetAttribute(node, "src")
 					script := HoistedScript{
-						Src:  "",
-						Code: "",
-						Type: "",
-						Map:  "",
+						Src:             "",
+						Code:            "",
+						Type:            "",
+						Map:             "",
+						ServerFunctions: "",
 					}
 
 					if src != nil {
 						script.Type = "external"
 						script.Src = src.Val
 					} else if node.FirstChild != nil {
+						if node.Attr != nil && len(node.Attr) > 0 {
+							// assume the only attribute to be "define:serverfunctions"
+							rawValue := node.Attr[0].Val
+							script.ServerFunctions = rawValue
+							// remove "{" and "} from the string
+							rawValue = rawValue[1 : len(rawValue)-1]
+							for _, mapping := range strings.Split(rawValue, ",") {
+								if strings.Contains(mapping, ":") {
+									// when define:vars is in the form of {{ sfNameInFrontmatter: sfNameInScriptTag }}, sfNameInFrontmatter should be put up for hoisting
+									transformOptions.ExtraHoist = append(transformOptions.ExtraHoist, strings.TrimSpace(strings.Split(mapping, ":")[0]))
+								} else {
+									transformOptions.ExtraHoist = append(transformOptions.ExtraHoist, strings.TrimSpace(mapping))
+								}
+							}
+						}
+						// fmt.Println("transformOptions.ExtraHoist", transformOptions.ExtraHoist)
 						script.Type = "inline"
 
 						if transformOptions.SourceMap != "" {

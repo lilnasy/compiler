@@ -1,0 +1,19 @@
+#!/bin/sh
+
+prev_mod_timeA=$(stat -c %Y x.ts)
+prev_mod_timeB=$(stat -c %Y packages/compiler/dist/astro.wasm)
+
+while sleep 1; do
+    current_mod_timeA=$(stat -c %Y x.ts)
+    current_mod_timeB=$(stat -c %Y packages/compiler/dist/astro.wasm)
+    if [[ $current_mod_timeA -gt $prev_mod_timeA ]]; then
+        reset
+        deno run -A x.ts
+        prev_mod_timeA=$current_mod_timeA
+    fi
+    if [[ $current_mod_timeB -gt $prev_mod_timeB ]]; then
+        reset
+        deno run -A x.ts
+        prev_mod_timeB=$current_mod_timeB
+    fi
+done

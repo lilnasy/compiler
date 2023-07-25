@@ -19,8 +19,10 @@ type HoistedScripts struct {
 	BodyLocs    []loc.Loc
 }
 
-func HoistExports(source []byte) HoistedScripts {
-	shouldHoist := bytes.Contains(source, []byte("export"))
+func HoistExports(source []byte, serverfunctionstohoist []string) HoistedScripts {
+	// should hoist if one of the scripts has "define:serverfunctions"
+	shouldHoist := bytes.Contains(source, []byte("export")) || len(serverfunctionstohoist) != 0
+
 	if !shouldHoist {
 		body := make([][]byte, 0)
 		body = append(body, source)
@@ -31,6 +33,8 @@ func HoistExports(source []byte) HoistedScripts {
 			BodyLocs: bodyLocs,
 		}
 	}
+
+	// fmt.Println("string(source)", string(source))
 
 	l := js.NewLexer(parse.NewInputBytes(source))
 	i := 0
@@ -46,6 +50,143 @@ func HoistExports(source []byte) HoistedScripts {
 outer:
 	for {
 		token, value := l.Next()
+
+		if token == js.FunctionToken {
+			// start storing the function decleration in "funBlock" in case we need to hoist it
+			funBlock := make([]byte, 0)
+			funBlock = append(funBlock, value...)
+			i += len(value)
+
+			// function keyword would be followed by a whitespace
+			token, value = l.Next()
+			funBlock = append(funBlock, value...)
+			i += len(value)
+
+			// whitespace would be followed by the function name/identifier
+			token, value = l.Next()
+			funBlock = append(funBlock, value...)
+			i += len(value)
+
+			hoistSF := false
+			for _, sf := range serverfunctionstohoist {
+				if string(value) == sf {
+					hoistSF = true
+					break
+				}
+			}
+
+			// if the function isnt a server function that needs to be hoisted,
+			// continue the outer loop with tokens following the function name/identifier
+			if !hoistSF {
+				continue outer
+			}
+
+			// function name/identifier may be followed by a whitespace or "("
+			// consume until "("
+			for {
+				token, value = l.Next()
+				funBlock = append(funBlock, value...)
+				i += len(value)
+
+				// Track opening and closing braces
+				if js.IsPunctuator(token) {
+					if value[0] == '{' || value[0] == '(' || value[0] == '[' {
+						pairs[value[0]]++
+						i += len(value)
+					} else if value[0] == '}' {
+						pairs['{']--
+					} else if value[0] == ')' {
+						pairs['(']--
+					} else if value[0] == ']' {
+						pairs['[']--
+					}
+				}
+
+				if token == js.OpenParenToken {
+					break
+				}
+			}
+
+			// consume until the last paren closes
+			for {
+				token, value = l.Next()
+				funBlock = append(funBlock, value...)
+				i += len(value)
+
+				// Track opening and closing braces
+				if js.IsPunctuator(token) {
+					if value[0] == '{' || value[0] == '(' || value[0] == '[' {
+						pairs[value[0]]++
+						i += len(value)
+					} else if value[0] == '}' {
+						pairs['{']--
+					} else if value[0] == ')' {
+						pairs['(']--
+					} else if value[0] == ']' {
+						pairs['[']--
+					}
+				}
+
+				if token == js.CloseParenToken && pairs['('] == 0 {
+					break
+				}
+			}
+
+			// consume until "{"
+			for {
+				token, value = l.Next()
+				funBlock = append(funBlock, value...)
+				i += len(value)
+
+				// Track opening and closing braces
+				if js.IsPunctuator(token) {
+					if value[0] == '{' || value[0] == '(' || value[0] == '[' {
+						pairs[value[0]]++
+						i += len(value)
+					} else if value[0] == '}' {
+						pairs['{']--
+					} else if value[0] == ')' {
+						pairs['(']--
+					} else if value[0] == ']' {
+						pairs['[']--
+					}
+				}
+
+				if token == js.OpenBraceToken {
+					break
+				}
+			}
+
+			// consume until "}"
+			for {
+				token, value = l.Next()
+				funBlock = append(funBlock, value...)
+				i += len(value)
+
+				// Track opening and closing braces
+				if js.IsPunctuator(token) {
+					if value[0] == '{' || value[0] == '(' || value[0] == '[' {
+						pairs[value[0]]++
+						i += len(value)
+					} else if value[0] == '}' {
+						pairs['{']--
+					} else if value[0] == ')' {
+						pairs['(']--
+					} else if value[0] == ']' {
+						pairs['[']--
+					}
+				}
+
+				if token == js.CloseBraceToken && pairs['{'] == 0 {
+					break
+				}
+			}
+
+			hoisted = append(hoisted, funBlock)
+			hoistedLocs = append(hoistedLocs, loc.Loc{Start: i - len(funBlock)})
+
+			continue outer
+		}
 
 		if token == js.DivToken || token == js.DivEqToken {
 			lns := bytes.Split(source[i+1:], []byte{'\n'})
@@ -203,12 +344,26 @@ outer:
 	body = append(body, source[end:])
 	bodyLocs = append(bodyLocs, loc.Loc{Start: end})
 
+	// fmt.Println(
+	// 	"hoisted", Map(hoisted, func(a []byte) string { return string(a) }),
+	// 	"hoistedLocs", hoistedLocs,
+	// 	"body", Map(hoisted, func(a []byte) string { return string(a) }),
+	// 	"bodyLocs", bodyLocs)
+
 	return HoistedScripts{
 		Hoisted:     hoisted,
 		HoistedLocs: hoistedLocs,
 		Body:        body,
 		BodyLocs:    bodyLocs,
 	}
+}
+
+func Map[T any, M any](a []T, f func(T) M) []M {
+	n := make([]M, len(a))
+	for i, e := range a {
+		n[i] = f(e)
+	}
+	return n
 }
 
 func isKeyword(value []byte) bool {

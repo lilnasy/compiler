@@ -186,7 +186,7 @@ func render1(p *printer, n *Node, opts RenderOptions) {
 						}
 
 						// Extract exports
-						preprocessed := js_scanner.HoistExports(append(innerBody, '\n'))
+						preprocessed := js_scanner.HoistExports(append(innerBody, '\n'), opts.opts.ExtraHoist)
 						if len(preprocessed.Hoisted) > 0 {
 							for j, exported := range preprocessed.Hoisted {
 								exportedLoc := preprocessed.HoistedLocs[j]
