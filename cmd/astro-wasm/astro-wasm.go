@@ -342,7 +342,12 @@ func Transform() any {
 						script.Type = "external"
 						script.Src = src.Val
 					} else if node.FirstChild != nil {
-						script.Type = "inline"
+
+						if transform.HasArgsDirective(node) {
+							script.Type = "reusable"
+						} else {
+							script.Type = "inline"
+						}
 
 						if transformOptions.SourceMap != "" {
 							isLine := func(r rune) bool { return r == '\r' || r == '\n' }

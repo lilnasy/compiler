@@ -168,8 +168,12 @@ func render1(p *printer, n *Node, opts RenderOptions) {
 				// 1. Component imports, if any exist.
 				p.addNilSourceMapping()
 				p.printComponentMetadata(n.Parent, opts.opts, []byte(p.sourcetext))
-				// 2. Top-level Astro global.
 
+				// 2. List of module specifiers for define:args.
+				p.addNilSourceMapping()
+				p.printReusableScriptSpecifiers(n.Parent)
+
+				// 3. Top-level Astro global.
 				p.printTopLevelAstro(opts.opts)
 
 				exports := make([][]byte, 0)
@@ -255,6 +259,7 @@ func render1(p *printer, n *Node, opts RenderOptions) {
 		return
 	} else if !p.hasFuncPrelude {
 		p.printComponentMetadata(n.Parent, opts.opts, []byte{})
+		p.printReusableScriptSpecifiers(n.Parent)
 		p.printTopLevelAstro(opts.opts)
 
 		// Render func prelude. Will only run for the first non-frontmatter node
@@ -304,6 +309,11 @@ func render1(p *printer, n *Node, opts RenderOptions) {
 	case RenderHeadNode:
 		p.printMaybeRenderHead()
 		*opts.printedMaybeHead = true
+		return
+	}
+
+	if transform.HasArgsDirective(n) {
+		p.printDefineArgs(n)
 		return
 	}
 

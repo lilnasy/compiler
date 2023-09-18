@@ -78,7 +78,9 @@ func Transform(doc *astro.Node, opts TransformOptions, h *handler.Handler) *astr
 
 	// Important! Remove scripts from original location *after* walking the doc
 	for _, script := range doc.Scripts {
-		script.Parent.RemoveChild(script)
+		if !HasArgsDirective(script) {
+			script.Parent.RemoveChild(script)
+		}
 	}
 
 	// If we've emptied out all the nodes, this was a Fragment that only contained hoisted elements
@@ -338,19 +340,10 @@ func collapseWhitespace(doc *astro.Node) {
 
 func ExtractScript(doc *astro.Node, n *astro.Node, opts *TransformOptions, h *handler.Handler) {
 	if n.Type == astro.ElementNode && n.DataAtom == a.Script {
-		if HasSetDirective(n) || HasInlineDirective(n) {
-			return
-		}
-		// Ignore scripts in svg/noscript/etc
-		if !IsHoistable(n) {
-			return
-		}
-
 		// if <script>, hoist to the document root
 		// If also using define:vars, that overrides the hoist tag.
-		if (hasTruthyAttr(n, "hoist")) ||
-			len(n.Attr) == 0 || (len(n.Attr) == 1 && n.Attr[0].Key == "src") {
-			shouldAdd := true
+		if CouldBeHoisted(n) {
+			shouldHoist := true
 			for _, attr := range n.Attr {
 				if attr.Key == "hoist" {
 					h.AppendWarning(&loc.ErrorWithRange{
@@ -361,7 +354,7 @@ func ExtractScript(doc *astro.Node, n *astro.Node, opts *TransformOptions, h *ha
 				}
 				if attr.Key == "src" {
 					if attr.Type == astro.ExpressionAttribute {
-						shouldAdd = false
+						shouldHoist = false
 						h.AppendWarning(&loc.ErrorWithRange{
 							Code:  loc.WARNING_UNSUPPORTED_EXPRESSION,
 							Text:  "<script> uses an expression for the src attribute and will be ignored.",
@@ -374,7 +367,7 @@ func ExtractScript(doc *astro.Node, n *astro.Node, opts *TransformOptions, h *ha
 			}
 
 			// prepend node to maintain authored order
-			if shouldAdd {
+			if shouldHoist {
 				doc.Scripts = append([]*astro.Node{n}, doc.Scripts...)
 			}
 		} else {

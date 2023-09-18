@@ -46,8 +46,10 @@ var CREATE_TRANSITION_SCOPE = "$$createTransitionScope"
 var SPREAD_ATTRIBUTES = "$$spreadAttributes"
 var DEFINE_STYLE_VARS = "$$defineStyleVars"
 var DEFINE_SCRIPT_VARS = "$$defineScriptVars"
+var DEFINE_ARGS = "$$defineArgs"
 var CREATE_METADATA = "$$createMetadata"
 var METADATA = "$$metadata"
+var REUSABLE_SCRIPTS = "$$reusableScripts"
 var RESULT = "$$result"
 var SLOTS = "$$slots"
 var FRAGMENT = "Fragment"
@@ -119,6 +121,8 @@ func (p *printer) printInternalImports(importSpecifier string, opts *RenderOptio
 	p.print("defineStyleVars as " + DEFINE_STYLE_VARS + ",\n  ")
 	p.addNilSourceMapping()
 	p.print("defineScriptVars as " + DEFINE_SCRIPT_VARS + ",\n  ")
+	p.addNilSourceMapping()
+	p.print("defineArgs as " + DEFINE_ARGS + ",\n  ")
 	p.addNilSourceMapping()
 	p.print("renderTransition as " + RENDER_TRANSITION + ",\n  ")
 	p.addNilSourceMapping()
@@ -244,6 +248,37 @@ func (p *printer) printDefineVarsClose(n *astro.Node) {
 	}
 	if !isTypeModuleScript(n) {
 		p.print("})();")
+	}
+}
+
+func (p *printer) printDefineArgs(n *astro.Node) {
+	for _, attr := range n.Attr {
+
+		if attr.Key != "define:args" {
+			continue
+		}
+
+		var value = strings.TrimSpace(attr.Val)
+
+		var index = 0
+		for _, script := range n.Parent.Scripts {
+			if script == n {
+				break
+			} else if transform.HasArgsDirective(script) {
+				index += 1
+			}
+		}
+
+		p.addNilSourceMapping()
+		p.print(fmt.Sprintf("${%s(%s, %s[%v], ", DEFINE_ARGS, RESULT, REUSABLE_SCRIPTS, index))
+
+		p.addSourceMapping(attr.ValLoc)
+		p.printf(value)
+
+		p.addNilSourceMapping()
+		p.print(")}")
+
+		return
 	}
 }
 
@@ -623,7 +658,7 @@ func (p *printer) printComponentMetadata(doc *astro.Node, opts transform.Transfo
 		escapedPatharg := strings.ReplaceAll(patharg, "'", "\\'")
 		patharg = fmt.Sprintf("\"%s\"", escapedPatharg)
 	}
-	p.print(fmt.Sprintf("\nexport const $$metadata = %s(%s, { ", CREATE_METADATA, patharg))
+	p.print(fmt.Sprintf("\nexport const %s = %s(%s, { ", METADATA, CREATE_METADATA, patharg))
 
 	// Add modules
 	p.print("modules: [")
@@ -702,10 +737,31 @@ conly_loop:
 			p.print(fmt.Sprintf("{ type: 'define:vars', value: `%s`, keys: '%s' }", escapeInterpolation(escapeBackticks(node.FirstChild.Data)), escapeSingleQuote(string(params))))
 		case src != nil:
 			p.print(fmt.Sprintf("{ type: 'external', src: '%s' }", escapeSingleQuote(src.Val)))
+		case transform.HasArgsDirective(node):
+			p.print(fmt.Sprintf("{ type: 'reusable', value: `%s` }", escapeInterpolation(escapeBackticks(node.FirstChild.Data))))
 		case node.FirstChild != nil:
 			p.print(fmt.Sprintf("{ type: 'inline', value: `%s` }", escapeInterpolation(escapeBackticks(node.FirstChild.Data))))
 		}
 	}
 
 	p.print("] });\n\n")
+}
+
+func (p *printer) printReusableScriptSpecifiers(doc *astro.Node) {
+
+	p.print(fmt.Sprintf("const %s = [", REUSABLE_SCRIPTS))
+
+	for i, node := range doc.Scripts {
+		if !transform.HasArgsDirective(node) {
+			continue
+		}
+
+		if i > 0 {
+			p.print(", ")
+		}
+
+		p.print(fmt.Sprintf("\"%s?astro&type=script&index=%v&lang.ts\"", p.opts.Filename, i))
+	}
+
+	p.print("];\n\n")
 }

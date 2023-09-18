@@ -25,6 +25,45 @@ func HasInlineDirective(n *astro.Node) bool {
 	return HasAttr(n, "is:inline")
 }
 
+func HasArgsDirective(n *astro.Node) bool {
+	return HasAttr(n, "define:args")
+}
+
+func CouldBeHoisted(n *astro.Node) bool {
+
+	if HasSetDirective(n) {
+		return false
+	}
+
+	if HasInlineDirective(n) {
+		return false
+	}
+
+	// Ignore scripts in svg/noscript/etc
+	if !IsHoistable(n) {
+		return false
+	}
+
+	// if <script>, hoist to the document root
+	if hasTruthyAttr(n, "hoist") {
+		return true
+	}
+
+	if len(n.Attr) == 0 {
+		return true
+	}
+
+	if len(n.Attr) == 1 && n.Attr[0].Key == "src" {
+		return true
+	}
+
+	if len(n.Attr) == 1 && HasArgsDirective(n) {
+		return true
+	}
+
+	return false
+}
+
 func AttrIndex(n *astro.Node, key string) int {
 	for i, attr := range n.Attr {
 		if attr.Key == key {

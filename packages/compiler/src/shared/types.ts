@@ -70,6 +70,11 @@ export type HoistedScript = { type: string } & (
       code: string;
       map: string;
     }
+  | {
+      type: 'reusable'
+      code: string
+      map: string
+  }
 );
 
 export interface HydratedComponent {
