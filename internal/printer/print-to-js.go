@@ -515,7 +515,7 @@ func render1(p *printer, n *Node, opts RenderOptions) {
 			switch true {
 			case n.CustomElement:
 				p.print(`,{`)
-				p.print(fmt.Sprintf(`"%s": () => `, "default"))
+				p.print(fmt.Sprintf(`"%s": (_, $$context) => `, "default"))
 				p.printTemplateLiteralOpen()
 				for c := n.FirstChild; c != nil; c = c.NextSibling {
 					render1(p, c, RenderOptions{
@@ -581,14 +581,14 @@ func render1(p *printer, n *Node, opts RenderOptions) {
 										if a.Type == QuotedAttribute {
 											nestedSlotProp := fmt.Sprintf(`"%s"`, escapeDoubleQuote(a.Val))
 											nestedSlots = append(nestedSlots, nestedSlotProp)
-											conditionalChildren = append(conditionalChildren, &Node{Type: TextNode, Data: fmt.Sprintf("{%s: () => ", nestedSlotProp), Loc: make([]loc.Loc, 1)})
+											conditionalChildren = append(conditionalChildren, &Node{Type: TextNode, Data: fmt.Sprintf("{%s: (_, $$context) => ", nestedSlotProp), Loc: make([]loc.Loc, 1)})
 											conditionalChildren = append(conditionalChildren, c1)
 											conditionalChildren = append(conditionalChildren, &Node{Type: TextNode, Data: "}", Loc: make([]loc.Loc, 1)})
 											continue child_loop
 										} else if a.Type == ExpressionAttribute {
 											nestedSlotProp := fmt.Sprintf(`[%s]`, a.Val)
 											nestedSlots = append(nestedSlots, nestedSlotProp)
-											conditionalChildren = append(conditionalChildren, &Node{Type: TextNode, Data: fmt.Sprintf("{%s: () => ", nestedSlotProp), Loc: make([]loc.Loc, 1)})
+											conditionalChildren = append(conditionalChildren, &Node{Type: TextNode, Data: fmt.Sprintf("{%s: (_, $$context) => ", nestedSlotProp), Loc: make([]loc.Loc, 1)})
 											conditionalChildren = append(conditionalChildren, c1)
 											conditionalChildren = append(conditionalChildren, &Node{Type: TextNode, Data: "}", Loc: make([]loc.Loc, 1)})
 											continue child_loop
@@ -642,9 +642,9 @@ func render1(p *printer, n *Node, opts RenderOptions) {
 
 						// If selected, pass through result object on the Astro side
 						if opts.opts.ResultScopedSlot {
-							p.print(fmt.Sprintf(`%s: ($$result) => `, slotProp))
+							p.print(fmt.Sprintf(`%s: ($$result, $$context) => `, slotProp))
 						} else {
-							p.print(fmt.Sprintf(`%s: () => `, slotProp))
+							p.print(fmt.Sprintf(`%s: (_, $$context) => `, slotProp))
 						}
 
 						p.printTemplateLiteralOpen()
@@ -711,6 +711,8 @@ func render1(p *printer, n *Node, opts RenderOptions) {
 					})
 				}
 			}
+		} else {
+			p.print(", $$context")
 		}
 	}
 
@@ -723,7 +725,7 @@ func render1(p *printer, n *Node, opts RenderOptions) {
 		p.printDefineVarsClose(n)
 	}
 	if isComponent || isSlot {
-		p.print(")}")
+		p.print(", $$context)}")
 	} else if !isImplicit {
 		if n.DataAtom == atom.Head {
 			*opts.printedMaybeHead = true
